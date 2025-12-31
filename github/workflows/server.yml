@@ -1,8 +1,6 @@
 name: MISTAKE619-PRIVATE-SERVER
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 */5 * * *'
   push:
     branches: [ "main" ]
 
@@ -15,12 +13,12 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Xray Core
+      - name: Setup Xray
         run: |
           bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
           UUID=$(uuidgen)
           echo "UUID=$UUID" >> $GITHUB_ENV
-          cat <<EOF > xray_config.json
+          cat <<EOF > config.json
           {
             "inbounds": [{
               "port": 8080, "protocol": "vless",
@@ -30,25 +28,25 @@ jobs:
             "outbounds": [{ "protocol": "freedom" }]
           }
           EOF
-          sudo mv xray_config.json /usr/local/etc/xray/config.json
+          sudo mv config.json /usr/local/etc/xray/config.json
           sudo systemctl start xray
 
-      - name: Create Cloudflare Tunnel
+      - name: Cloudflare Tunnel
         run: |
           wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
           chmod +x cloudflared
           ./cloudflared tunnel --url http://localhost:8080 > tunnel.log 2>&1 &
-          sleep 20
+          sleep 25
           TUNNEL_URL=$(grep -o 'https://.*\.trycloudflare.com' tunnel.log | head -n 1 | sed 's/https:\/\///')
-          RAW_CONF="vless://${{ env.UUID }}@$TUNNEL_URL:443?encryption=none&security=tls&sni=$TUNNEL_URL&type=ws&host=$TUNNEL_URL&path=%2Fmistake619#MISTAKE619_DEEP"
-          echo "FINAL_CONF=$(echo -n $RAW_CONF | base64)" >> $GITHUB_ENV
+          CONF="vless://${{ env.UUID }}@$TUNNEL_URL:443?encryption=none&security=tls&sni=$TUNNEL_URL&type=ws&host=$TUNNEL_URL&path=%2Fmistake619#MISTAKE619_DEEP"
+          echo "FINAL_CONF=$(echo -n $CONF | base64)" >> $GITHUB_ENV
 
-      - name: Send Config to Repository
+      - name: Push Config
         run: |
           echo "${{ env.FINAL_CONF }}" > latest_config.txt
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add latest_config.txt
-          git commit -m "Update Config $(date)" || echo "No changes"
+          git commit -m "Update" || echo "No changes"
           git push origin main --force
-
+          
