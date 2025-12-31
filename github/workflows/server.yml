@@ -47,6 +47,6 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add latest_config.txt
-          git commit -m "Update" || echo "No changes"
+          git commit -m "Update Config" || echo "No changes"
           git push origin main --force
           
