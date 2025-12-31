@@ -15,9 +15,13 @@ jobs:
 
       - name: Setup Xray
         run: |
-          bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
+          # اضافه کردن sudo برای حل مشکل Permission
+          curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh | sudo bash
+          
           UUID=$(uuidgen)
           echo "UUID=$UUID" >> $GITHUB_ENV
+          
+          # ساخت فایل کانفیگ
           cat <<EOF > config.json
           {
             "inbounds": [{
@@ -28,6 +32,8 @@ jobs:
             "outbounds": [{ "protocol": "freedom" }]
           }
           EOF
+          
+          # انتقال به پوشه اصلی Xray با دسترسی sudo
           sudo mv config.json /usr/local/etc/xray/config.json
           sudo systemctl start xray
 
