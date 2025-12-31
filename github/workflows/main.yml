@@ -1,0 +1,50 @@
+name: MISTAKE619-PRIVATE-SERVER
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */5 * * *' # ریستارت خودکار هر ۵ ساعت
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Xray Core
+        run: |
+          bash <(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
+          UUID=$(uuidgen)
+          echo "UUID=$UUID" >> $GITHUB_ENV
+          # ساخت کانفیگ VLESS روی WebSocket
+          cat <<EOF > /usr/local/etc/xray/config.json
+          {
+            "inbounds": [{
+              "port": 8080, "protocol": "vless",
+              "settings": { "clients": [{"id": "$UUID"}], "decryption": "none" },
+              "streamSettings": { "network": "ws", "wsSettings": { "path": "/mistake619" } }
+            }],
+            "outbounds": [{ "protocol": "freedom" }]
+          }
+          EOF
+          sudo systemctl start xray
+
+      - name: Create Cloudflare Tunnel
+        run: |
+          wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
+          chmod +x cloudflared
+          ./cloudflared tunnel --url http://localhost:8080 > tunnel.log 2>&1 &
+          sleep 15
+          TUNNEL_URL=$(grep -o 'https://.*\.trycloudflare.com' tunnel.log | head -n 1 | sed 's/https:\/\///')
+          # رمزنگاری کانفیگ با Base64 برای ارسال امن به ترموکس
+          RAW_CONF="vless://${{ env.UUID }}@$TUNNEL_URL:443?encryption=none&security=tls&sni=$TUNNEL_URL&type=ws&host=$TUNNEL_URL&path=%2Fmistake619#MISTAKE619_DEEP"
+          echo "FINAL_CONF=$(echo -n $RAW_CONF | base64)" >> $GITHUB_ENV
+
+      - name: Send Config to Repository
+        run: |
+          echo "${{ env.FINAL_CONF }}" > latest_config.txt
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add latest_config.txt
+          git commit -m "Update Stealth Config [$(date)]"
+          git push origin main --force
+          
